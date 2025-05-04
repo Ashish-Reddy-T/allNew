@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 
 class QueryExpander:
     """
-    Improved query expansion using a language model:
-    1. Extracts filters like neighborhood, cuisine, etc.
-    2. Generates expanded hypothetical descriptions (HyDE)
-    3. Can handle context like weather, time, etc.
+    Dynamic query expansion using a language model:
+    1. Extracts structured components (filters, intents, etc.)
+    2. Identifies the underlying user need beyond literal words
+    3. Generates expanded hypothetical descriptions (HyDE)
+    4. Considers implicit context and intent
     """
     def __init__(
         self,
@@ -78,20 +79,24 @@ class QueryExpander:
             
         return text
 
-    def extract_filters(self, query: str) -> Dict[str, str]:
+    def extract_structured_info(self, query: str) -> Dict[str, str]:
         """
-        Extract structured filters from query (neighborhood, place type, etc.)
+        Extract structured information from query (intent, filters, search type)
         """
-        filter_prompt = (
-            "Given this search query, extract any filters like neighborhood, place type, or cuisine. "
-            "Format your response as a Python dictionary. Only include filters that are explicitly mentioned. "
+        structure_prompt = (
+            "You are a query understanding expert. Analyze this search query and extract: \n"
+            "1. Main intent - the core purpose (finding food, entertainment, dating spot, etc.)\n"
+            "2. Filters - specific constraints (neighborhood, cuisine, price, etc.)\n"
+            "3. Vibe words - descriptive terms about atmosphere/feeling\n"
+            "4. Activities - what the user wants to do\n"
+            "5. Time context - any time of day/week mentions\n\n"
             f"Query: '{query}'\n\n"
-            "Extracted filters:"
+            "Format your response as a Python dictionary with these keys. Include only what's explicitly or strongly implied:"
         )
         
         try:
-            result = self._generate_text(filter_prompt, max_new_tokens=100, temperature=0.1)
-            logger.info(f"Filter extraction result: {result}")
+            result = self._generate_text(structure_prompt, max_new_tokens=150, temperature=0.1)
+            logger.info(f"Structure extraction result: {result}")
             
             # Try to extract a dictionary using regex
             dict_pattern = r'{[\s\S]*}'
@@ -99,85 +104,173 @@ class QueryExpander:
             
             if dict_match:
                 dict_str = dict_match.group(0)
+                # Clean up the dictionary string
+                dict_str = dict_str.replace("'", '"')  # Replace single quotes with double quotes
+                dict_str = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*):(\s*)', r'\1"\2":\3', dict_str)  # Add quotes to keys
+                
                 try:
                     # Try to parse as JSON
-                    filter_dict = json.loads(dict_str)
-                    return filter_dict
-                except json.JSONDecodeError:
+                    return json.loads(dict_str)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse JSON: {e}")
                     # Fallback to a simpler approach
-                    filter_dict = {}
-                    if "neighborhood" in result.lower():
-                        match = re.search(r"'neighborhood':\s*'([^']*)'", result)
+                    info_dict = {}
+                    for key in ["main_intent", "filters", "vibe_words", "activities", "time_context"]:
+                        pattern = rf'"{key}":\s*"([^"]*)"'
+                        match = re.search(pattern, dict_str)
                         if match:
-                            filter_dict["neighborhood"] = match.group(1).lower()
-                    
-                    if "place_type" in result.lower():
-                        match = re.search(r"'place_type':\s*'([^']*)'", result)
-                        if match:
-                            filter_dict["place_type"] = match.group(1).lower()
-                            
-                    return filter_dict
+                            info_dict[key] = match.group(1).lower()
+                    return info_dict
             
-            # If no dictionary pattern found, process line by line
-            filter_dict = {}
+            # If no dictionary pattern found, extract line by line
+            info_dict = {}
             lines = result.split('\n')
             for line in lines:
                 if ':' in line:
                     key, value = line.split(':', 1)
-                    key = key.strip().strip("'\"").lower()
+                    key = key.strip().strip("'\"").lower().replace(" ", "_")
                     value = value.strip().strip("'\"").lower()
                     if key and value:
-                        filter_dict[key] = value
+                        info_dict[key] = value
             
-            return filter_dict
+            return info_dict
             
         except Exception as e:
-            logger.warning(f"Failed to extract filters: {e}")
+            logger.warning(f"Failed to extract structured info: {e}")
             return {}
+
+    def interpret_intent(self, query: str) -> str:
+        """
+        Go beyond literal words to understand what the user really wants.
+        """
+        intent_prompt = (
+            "You are an expert in understanding human search intentions. "
+            "For this query, explain what the user is REALLY looking for beyond the literal words. "
+            "Consider both explicit and implicit needs. "
+            f"Query: '{query}'\n\n"
+            "What is the user actually looking for? Be specific but concise (30-50 words):"
+        )
+        
+        try:
+            intent = self._generate_text(intent_prompt, max_new_tokens=100, temperature=0.3)
+            logger.info(f"Intent interpretation: {intent[:100]}...")
+            return intent
+        except Exception as e:
+            logger.warning(f"Failed to interpret intent: {e}")
+            return query
 
     def generate_hyde(
         self,
         query: str,
+        structured_info: Dict[str, str],
         weather: Optional[str] = None,
         time_context: Optional[str] = None,
     ) -> str:
         """
         Generate a hypothetical document paragraph that captures the user's intent.
+        Now uses structured information to create more targeted hypothetical documents.
         """
+        # Extract relevant information
+        main_intent = structured_info.get("main_intent", "")
+        vibe_words = structured_info.get("vibe_words", "")
+        activities = structured_info.get("activities", "")
+        
         # Add context if provided
         context = ""
         if weather:
             context += f" The weather is {weather}."
         if time_context:
             context += f" It's {time_context}."
+        elif structured_info.get("time_context"):
+            context += f" It's {structured_info.get('time_context')}."
 
         prompt = (
-            "You are a helpful assistant.\n"
-            f"Based on the user's search query: '{query}'{context}, "
-            "write a detailed paragraph describing the perfect place that would match this query. "
-            "Include details about atmosphere, clientele, activities, and vibe. "
-            "Write about 80-100 words."
+            "You are a NYC expert describing the perfect place for someone.\n\n"
+            f"Their request: '{query}'\n"
+            f"What they're looking for: {main_intent}\n"
+            f"Vibe they want: {vibe_words}\n"
+            f"Activities: {activities}\n"
+            f"Context: {context}\n\n"
+            "Write a detailed paragraph (80-120 words) describing the perfect place that would "
+            "match their needs. Include specific details about the atmosphere, typical clientele, "
+            "activities available, and the overall experience. Your description should capture "
+            "the essence of what they're searching for."
         )
         
         logger.info(f"Generating HyDE for query: {query}")
-        hyde_doc = self._generate_text(prompt, max_new_tokens=150)
+        hyde_doc = self._generate_text(prompt, max_new_tokens=200, temperature=0.7)
         logger.info(f"Generated HyDE: {hyde_doc[:100]}...")
         
         return hyde_doc
+    
+    def generate_diverse_queries(self, query: str, structured_info: Dict[str, str], num_queries: int = 3) -> List[str]:
+        """
+        Generate diverse alternative search queries to capture different aspects of the intent.
+        """
+        prompt = (
+            "You are a search expert helping expand a query into multiple perspectives.\n\n"
+            f"Original query: '{query}'\n"
+            f"User intention: {structured_info.get('main_intent', '')}\n\n"
+            f"Generate {num_queries} alternative search queries that capture different aspects of "
+            f"what the user is looking for. Make each one focus on a different facet or interpretation "
+            f"of the user's intent. Each query should be between 3-10 words and be different from each other."
+            f"\n\nAlternative queries (one per line):"
+        )
+        
+        try:
+            result = self._generate_text(prompt, max_new_tokens=150, temperature=0.8)
+            # Split by newlines and clean
+            alternative_queries = [q.strip() for q in result.split('\n') if q.strip()]
+            # Take only the requested number, removing any numbering
+            cleaned_queries = []
+            for q in alternative_queries[:num_queries]:
+                # Remove numbering like "1. " or "1) " if present
+                cleaned = re.sub(r'^\d+[\.\)\-]\s*', '', q)
+                cleaned_queries.append(cleaned)
+                
+            logger.info(f"Generated alternative queries: {cleaned_queries}")
+            return cleaned_queries
+        except Exception as e:
+            logger.warning(f"Failed to generate alternative queries: {e}")
+            return [query]  # Return original if failed
 
-    def process_query(self, query: str) -> Tuple[Dict[str, str], str]:
+    def process_query(
+        self, 
+        query: str,
+        weather: Optional[str] = None,
+        time_context: Optional[str] = None,
+        generate_alternatives: bool = False
+    ) -> Dict:
         """
-        Complete query processing: extract filters and generate HyDE document
-        Returns: (filters, expanded_query)
+        Complete query processing pipeline.
+        Returns a dictionary with all query understanding components.
         """
-        # Extract structured filters
-        filters = self.extract_filters(query)
-        logger.info(f"Extracted filters: {filters}")
+        # Extract structured information
+        structured_info = self.extract_structured_info(query)
+        logger.info(f"Extracted structured info: {structured_info}")
+        
+        # Interpret deeper intent
+        intent = self.interpret_intent(query)
+        logger.info(f"Interpreted intent: {intent}")
         
         # Generate HyDE document
-        hyde_doc = self.generate_hyde(query)
+        hyde_doc = self.generate_hyde(query, structured_info, weather, time_context)
         
-        return filters, hyde_doc
+        # Optionally generate alternative queries
+        alt_queries = []
+        if generate_alternatives:
+            alt_queries = self.generate_diverse_queries(query, structured_info)
+        
+        # Combine everything into a comprehensive query understanding
+        query_understanding = {
+            "original_query": query,
+            "structured_info": structured_info,
+            "interpreted_intent": intent,
+            "hyde_document": hyde_doc,
+            "alternative_queries": alt_queries
+        }
+        
+        return query_understanding
 
 if __name__ == "__main__":
     # Clear memory
@@ -192,12 +285,31 @@ if __name__ == "__main__":
         if q.lower() in ('exit', 'quit', 'q'):
             break
             
-        filters, hyde_doc = expander.process_query(q)
+        # Option for generating alternatives
+        gen_alt = input("Generate alternative queries? (y/n, default=n): ").lower() == 'y'
         
-        print("\n--- Extracted Filters ---")
-        for k, v in filters.items():
+        # Optional context
+        weather = input("Weather context (optional, press Enter to skip): ").strip() or None
+        time = input("Time context (optional, press Enter to skip): ").strip() or None
+        
+        results = expander.process_query(q, weather, time, gen_alt)
+        
+        print("\n--- Query Understanding Results ---")
+        print(f"Original query: {results['original_query']}")
+        
+        print("\n--- Structured Information ---")
+        for k, v in results['structured_info'].items():
             print(f"{k}: {v}")
             
+        print("\n--- Interpreted Intent ---")
+        print(results['interpreted_intent'])
+        
         print("\n--- Generated HyDE Document ---")
-        print(hyde_doc)
-        print("\n" + "-"*50)
+        print(results['hyde_document'])
+        
+        if results['alternative_queries']:
+            print("\n--- Alternative Queries ---")
+            for i, alt in enumerate(results['alternative_queries'], 1):
+                print(f"{i}. {alt}")
+        
+        print("\n" + "-"*60)
