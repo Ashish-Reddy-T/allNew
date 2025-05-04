@@ -76,6 +76,21 @@ async def search(req: SearchRequest):
         # Calculate processing time
         processing_time = time.time() - start_time
         
+        # Print results to terminal
+        print("\n=== SEARCH RESULTS ===")
+        print(f"Query: {req.query}")
+        print(f"Enhanced: {results.get('processed_query', 'None')}")
+        print(f"Found {len(results['results'])} results")
+        
+        for i, place in enumerate(results['results'], 1):
+            print(f"\n{i}. {place.get('name', 'Unknown')} ({place.get('neighborhood', 'Unknown')})")
+            print(f"   Score: {place.get('score', 0):.2f}")
+            print(f"   Tags: {place.get('tags', '')}")
+            if 'match_reason' in place:
+                print(f"   Reason: {place['match_reason']}")
+        
+        print("\n=====================\n")
+        
         # Return formatted response
         return SearchResponse(
             results=results["results"],

@@ -128,6 +128,7 @@ async function performSearch() {
         // Get options
         const enhance = enhanceQueryOption.checked;
         const explain = explainResultsOption.checked;
+        const useImages = document.getElementById('useImages').checked;
         
         // Call the search API
         const response = await fetch('/api/search', {
@@ -137,7 +138,7 @@ async function performSearch() {
                 query: query,
                 limit: 20,
                 use_text: true,
-                use_images: true,
+                use_images: useImages,
                 enhance: enhance,
                 explain: explain,
                 rerank: true
