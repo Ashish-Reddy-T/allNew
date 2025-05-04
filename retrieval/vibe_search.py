@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 import faiss
 import torch
+import pickle
 from sentence_transformers import SentenceTransformer
 from tqdm.auto import tqdm
 import re
