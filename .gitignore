@@ -1,0 +1,5 @@
+
+*.faiss
+*.pkl
+*.DS_Store
+*.pyc
