@@ -1,0 +1,41 @@
+# Core Web Framework
+fastapi
+uvicorn[standard] # Includes standard dependencies like websockets and http tools
+python-multipart # For potential form data (good practice for FastAPI)
+jinja2 # For HTML templating
+
+# Data Handling & Numerics
+numpy
+pandas # For reading CSVs in ingestion
+tqdm # For progress bars
+
+# Vector Search
+# Choose one:
+faiss-cpu # For CPU-based FAISS
+# faiss-gpu # For GPU-based FAISS (requires CUDA setup)
+
+# Machine Learning & Embeddings
+torch # Core PyTorch library (ensure version compatible with your hardware/MPS)
+sentence-transformers # For BGE text embeddings
+transformers # For CLIP model and potentially other Hugging Face models
+Pillow # For image handling (needed by CLIP/transformers)
+requests # For downloading images in embed_image.py
+
+# LangChain & LLM Integration
+langchain
+langchain-community # Contains Ollama integration etc.
+# ollama # Python client for Ollama (might be needed depending on langchain version/usage)
+# langchain-ollama # Newer package for Ollama integration
+
+# Optional ML Optimizations (Recommended by Transformers/Hugging Face)
+accelerate
+# bitsandbytes # Primarily for NVIDIA GPU quantization, might not be needed/work on Mac M-series
+
+# --- Notes ---
+# 1. Ensure PyTorch is installed correctly for your system (CPU, CUDA, or MPS for Mac).
+#    Check PyTorch website for specific installation commands.
+# 2. FAISS installation can be tricky, especially on macOS.
+#    'faiss-cpu' via pip might work, but Conda/Miniforge is often recommended for M-series Macs.
+# 3. For LangChain > 0.3.0, you might prefer 'langchain-ollama' over the built-in 'ollama' client.
+# 4. Remove 'faiss-gpu' if you are only using CPU.
+# 5. 'bitsandbytes' might not be necessary or functional on non-NVIDIA hardware.
