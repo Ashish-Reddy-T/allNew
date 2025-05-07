@@ -124,3 +124,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     # Ensure reload is False or handled carefully in production
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
+
+
+# no options selected, rerank = true; 
+# quick search = enabled, rerank = false;
+# image search = enabled, rerank = true;  --> thereby takes time
+# enhance search = enabled, rerank = true; --> thereby takes time
+# explain search = enabled, rerank = true;  --> thereby takes even more time

@@ -16,6 +16,36 @@ const explainResultsOption = document.getElementById('explainResults');
 const enableImageSearchOption = document.getElementById('useImages');
 const enableQuickSearchOption = document.getElementById('useQuickSearch');
 
+// Group LLM and Image search related options for easier management
+const llmRelatedOptions = [enableImageSearchOption, enhanceQueryOption, explainResultsOption];
+
+// Function to update the state of checkboxes based on interactions
+function updateCheckboxStates() {
+    if (enableQuickSearchOption.checked) {
+        // If Quick Search is ON, disable and uncheck other LLM/Image options
+        llmRelatedOptions.forEach(option => {
+            option.checked = false;
+            option.disabled = true;
+        });
+    } else {
+        // If Quick Search is OFF, enable other LLM/Image options
+        llmRelatedOptions.forEach(option => {
+            option.disabled = false;
+        });
+    }
+
+    // If any LLM/Image option is checked, disable and uncheck Quick Search
+    const anyLlmOptionChecked = llmRelatedOptions.some(option => option.checked);
+    if (anyLlmOptionChecked) {
+        enableQuickSearchOption.checked = false;
+        enableQuickSearchOption.disabled = true;
+    } else {
+        // If no LLM/Image options are checked, Quick Search should be enabled
+        enableQuickSearchOption.disabled = false;
+    }
+}
+
+
 // Initialize popovers and tooltips
 function initBootstrapComponents() {
     const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
@@ -73,8 +103,8 @@ function createPlaceCard(place) {
     // Format tags section
     const tagsSection = place.vibe_tags && place.vibe_tags.length > 0 
         ? place.vibe_tags.map(tag => `<span class="badge vibe-tag">${tag.replace(/_/g, ' ')}</span>`).join('')
-        : (place.tags ? `<span class="badge vibe-tag">${place.tags}</span>` : ''); // Fallback to place.tags if vibe_tags is not available
-    
+        : (place.tags ? `<span class="badge vibe-tag">${place.tags}</span>` : '');
+
     // Format explanation section
     const explanationSection = place.match_reason 
         ? `<div class="explanation"><i class="bi bi-lightbulb me-1"></i> ${place.match_reason}</div>`
@@ -127,31 +157,33 @@ async function performSearch() {
     noResults.classList.add('d-none');
     
     try {
-        // Get options
-        const enhance = enhanceQueryOption.checked;
-        const explain = explainResultsOption.checked;
-        const useImages = enableImageSearchOption.checked;
-        const quickSearch = enableQuickSearchOption.checked; // Read the Quick Search option
+        // Get options based on current checkbox states
+        const quickSearch = enableQuickSearchOption.checked;
+        let enhance, explain, useImages, rerank;
 
+        if (quickSearch) {
+            enhance = false;
+            explain = false;
+            useImages = false; // Assuming quick search implies no image search either
+            rerank = false;
+        } else {
+            enhance = enhanceQueryOption.checked;
+            explain = explainResultsOption.checked;
+            useImages = enableImageSearchOption.checked;
+            rerank = true; // Or make rerank also a checkbox if needed
+        }
+        
         // Construct the payload
         const payload = {
             query: query,
-            limit: 20, // You can make this configurable if needed
-            use_text: true, // Assuming text search is always enabled or configurable elsewhere
+            limit: 20, 
+            use_text: true, 
             use_images: useImages,
             enhance: enhance,
             explain: explain,
-            rerank: true, // Assuming rerank is always true or configurable. Set to false if quickSearch is true.
-            quick_search: quickSearch // Add the quick_search flag
+            rerank: rerank, 
+            quick_search: quickSearch 
         };
-
-        // If quickSearch is true, override LLM-specific flags to false
-        // as they won't be used anyway and it makes the intent clearer.
-        if (quickSearch) {
-            payload.enhance = false;
-            payload.explain = false;
-            payload.rerank = false; // Reranking is also an LLM operation
-        }
         
         // Call the search API
         const response = await fetch('/api/search', {
@@ -170,10 +202,11 @@ async function performSearch() {
         const results = data.results || [];
         
         // Display search info
-        searchStats.textContent = `Found ${results.length} places in ${data.processing_time.toFixed(2)} seconds.`;
+        let statsText = `Found ${results.length} places in ${data.processing_time.toFixed(2)} seconds.`;
         if (quickSearch) {
-            searchStats.textContent += " (Quick Search)";
+            statsText += " (Quick Search)";
         }
+        searchStats.textContent = statsText;
         
         // Display search mode
         searchMode.textContent = `Search modes: Text=${data.text_search_used}, Image=${data.image_search_used}`;
@@ -182,7 +215,7 @@ async function performSearch() {
         searchInfo.classList.remove('d-none');
         
         // Display enhanced query if available and not in quick search mode
-        if (data.processed_query && data.processed_query !== data.original_query && !quickSearch) {
+        if (data.processed_query && data.processed_query !== data.original_query && !quickSearch && enhance) {
             enhancedQuery.textContent = `Enhanced query: ${data.processed_query}`;
             enhancedQuery.classList.remove('d-none');
         } else {
@@ -197,10 +230,10 @@ async function performSearch() {
         
         // Display neighborhoods if available
         if (data.neighborhoods && data.neighborhoods.length > 0) {
-            const neighborhoodText = document.createElement('div');
-            neighborhoodText.className = 'mt-2';
-            neighborhoodText.textContent = `Detected neighborhoods: ${data.neighborhoods.join(', ')}`;
-            searchStats.appendChild(neighborhoodText); // Append to searchStats for better layout
+            const neighborhoodDiv = document.createElement('div'); // Create a new div for neighborhoods
+            neighborhoodDiv.className = 'mt-2 detected-neighborhoods'; // Add a class for styling if needed
+            neighborhoodDiv.textContent = `Detected neighborhoods: ${data.neighborhoods.join(', ')}`;
+            searchStats.appendChild(neighborhoodDiv); // Append to searchStats for better layout
         }
         
         // Display results
@@ -230,7 +263,14 @@ async function performSearch() {
     }
 }
 
-// Event listeners
+// Event listeners for checkboxes
+enableQuickSearchOption.addEventListener('change', updateCheckboxStates);
+llmRelatedOptions.forEach(option => {
+    option.addEventListener('change', updateCheckboxStates);
+});
+
+
+// Other Event listeners
 searchButton.addEventListener('click', performSearch);
 
 searchInput.addEventListener('keyup', (event) => {
@@ -249,6 +289,9 @@ exampleQueries.forEach(example => {
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', () => {
+    // Initial state update for checkboxes
+    updateCheckboxStates();
+
     // Check for URL parameters for initial search
     const urlParams = new URLSearchParams(window.location.search);
     const initialQuery = urlParams.get('q');
