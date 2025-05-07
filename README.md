@@ -6,7 +6,7 @@ Vibe Search is a multimodal semantic search engine for discovering places in New
 
 ## DEMO Link :)
 
-Please click [here]('https://youtu.be/pe6IovJ92xs') to be redirected to the DEMO video on YouTube!
+Please click [here](https://youtu.be/pe6IovJ92xs) to be redirected to the DEMO video on YouTube!
 
 ---
 
