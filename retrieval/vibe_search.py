@@ -36,7 +36,7 @@ class VibeSearch:
         image_meta_path: str = "ingestion/image_metadata.pkl",
         use_llm: bool = True, # This flag determines if LLM components are LOADED
         llm_type: str = "ollama",
-        llm_model: str = "mistral:7b-instruct-q4_K_M"
+        llm_model: str = "mistral:7b-instruct-v0.3-q4_K_M"
     ):
         logger.info(f"Initializing VibeSearch with use_llm={use_llm}")
         

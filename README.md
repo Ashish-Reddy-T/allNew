@@ -4,6 +4,12 @@ Vibe Search is a multimodal semantic search engine for discovering places in New
 
 ---
 
+## DEMO Link :)
+
+Please click [here]('https://youtu.be/pe6IovJ92xs') to be redirected to the DEMO video on YouTube!
+
+---
+
 ## Overview
 
 Have you ever struggled to find the perfect spot that matches exactly what you're looking for? Well, Vibe Search here lets you describe places in natural language and finds matches based on semantic understanding rather than just keywords. Be it "cozy cafes with a literary vibe" or "lively bars with outdoor seating in Williamsburg," Vibe Search understands your intent and finds the perfect match.
