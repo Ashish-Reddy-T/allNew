@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse # Removed JSONResponse as it's not directly used here
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -25,6 +25,7 @@ class SearchRequest(BaseModel):
     enhance: bool = True
     explain: bool = True
     rerank: bool = True
+    quick_search: bool = False
 
 class SearchResponse(BaseModel):
     results: List[Dict]
@@ -45,8 +46,11 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 # Initialize the search system
+# The VibeSearch instance is created once when the app starts.
+# Its internal 'use_llm' flag (defaulting to True) determines if LLM components are loaded.
+# The 'quick_search' flag from the request will determine if these loaded components are USED.
 vibe_search = VibeSearch()
-logger.info("Vibe Search system initialized")
+logger.info("Vibe Search system initialized (LLM components loaded if VibeSearch default use_llm=True)")
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index(request: Request):
@@ -59,48 +63,49 @@ async def search(req: SearchRequest):
     API endpoint for place searches
     """
     start_time = time.time()
-    logger.info(f"Search request: {req.query}")
+    logger.info(f"Search request: Query='{req.query}', QuickSearch={req.quick_search}, Enhance={req.enhance}, Explain={req.explain}")
     
     try:
         # Perform the search using your RAG system
-        results = vibe_search.search(
+        # Pass the quick_search flag from the request to the VibeSearch method
+        results_data = vibe_search.search(
             query=req.query,
             k=req.limit,
             use_text=req.use_text,
             use_images=req.use_images,
             enhance=req.enhance,
             explain=req.explain,
-            rerank=req.rerank
+            rerank=req.rerank,
+            quick_search=req.quick_search # Pass the flag here
         )
         
         # Calculate processing time
         processing_time = time.time() - start_time
         
-        # Print results to terminal
-        print("\n=== SEARCH RESULTS ===")
-        print(f"Query: {req.query}")
-        print(f"Enhanced: {results.get('processed_query', 'None')}")
-        print(f"Found {len(results['results'])} results")
-        
-        for i, place in enumerate(results['results'], 1):
-            print(f"\n{i}. {place.get('name', 'Unknown')} ({place.get('neighborhood', 'Unknown')})")
-            print(f"   Score: {place.get('score', 0):.2f}")
-            print(f"   Tags: {place.get('tags', '')}")
-            if 'match_reason' in place:
-                print(f"   Reason: {place['match_reason']}")
-        
-        print("\n=====================\n")
+        # Print results to terminal (optional, for debugging)
+        # Consider removing or reducing verbosity for production
+        print("\n=== SEARCH RESULTS (FastAPI) ===")
+        print(f"Original Query: {results_data['original_query']}")
+        if results_data['processed_query'] != results_data['original_query']:
+            print(f"Processed Query: {results_data['processed_query']}")
+        print(f"Quick Search Mode: {req.quick_search}")
+        print(f"Found {results_data['result_count']} results in {processing_time:.2f}s")
+        # for i, place in enumerate(results_data['results'], 1):
+        #     print(f"\n{i}. {place.get('name', 'Unknown')}")
+        #     if 'match_reason' in place:
+        #         print(f"   Reason: {place['match_reason']}")
+        print("==============================\n")
         
         # Return formatted response
         return SearchResponse(
-            results=results["results"],
-            original_query=results["original_query"],
-            processed_query=results["processed_query"],
-            neighborhoods=results.get("neighborhoods", []),
-            result_count=results["result_count"],
+            results=results_data["results"],
+            original_query=results_data["original_query"],
+            processed_query=results_data["processed_query"],
+            neighborhoods=results_data.get("neighborhoods", []),
+            result_count=results_data["result_count"],
             processing_time=processing_time,
-            text_search_used=results["text_search_used"],
-            image_search_used=results["image_search_used"]
+            text_search_used=results_data["text_search_used"],
+            image_search_used=results_data["image_search_used"]
         )
     except Exception as e:
         logger.error(f"Search error: {e}", exc_info=True)
@@ -117,4 +122,5 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
+    # Ensure reload is False or handled carefully in production
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)

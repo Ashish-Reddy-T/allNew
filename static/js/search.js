@@ -13,6 +13,8 @@ const exampleQueries = document.querySelectorAll('.example-query');
 // Options elements
 const enhanceQueryOption = document.getElementById('enhanceQuery');
 const explainResultsOption = document.getElementById('explainResults');
+const enableImageSearchOption = document.getElementById('useImages');
+const enableQuickSearchOption = document.getElementById('useQuickSearch');
 
 // Initialize popovers and tooltips
 function initBootstrapComponents() {
@@ -71,7 +73,7 @@ function createPlaceCard(place) {
     // Format tags section
     const tagsSection = place.vibe_tags && place.vibe_tags.length > 0 
         ? place.vibe_tags.map(tag => `<span class="badge vibe-tag">${tag.replace(/_/g, ' ')}</span>`).join('')
-        : '';
+        : (place.tags ? `<span class="badge vibe-tag">${place.tags}</span>` : ''); // Fallback to place.tags if vibe_tags is not available
     
     // Format explanation section
     const explanationSection = place.match_reason 
@@ -128,21 +130,34 @@ async function performSearch() {
         // Get options
         const enhance = enhanceQueryOption.checked;
         const explain = explainResultsOption.checked;
-        const useImages = document.getElementById('useImages').checked;
+        const useImages = enableImageSearchOption.checked;
+        const quickSearch = enableQuickSearchOption.checked; // Read the Quick Search option
+
+        // Construct the payload
+        const payload = {
+            query: query,
+            limit: 20, // You can make this configurable if needed
+            use_text: true, // Assuming text search is always enabled or configurable elsewhere
+            use_images: useImages,
+            enhance: enhance,
+            explain: explain,
+            rerank: true, // Assuming rerank is always true or configurable. Set to false if quickSearch is true.
+            quick_search: quickSearch // Add the quick_search flag
+        };
+
+        // If quickSearch is true, override LLM-specific flags to false
+        // as they won't be used anyway and it makes the intent clearer.
+        if (quickSearch) {
+            payload.enhance = false;
+            payload.explain = false;
+            payload.rerank = false; // Reranking is also an LLM operation
+        }
         
         // Call the search API
         const response = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: query,
-                limit: 20,
-                use_text: true,
-                use_images: useImages,
-                enhance: enhance,
-                explain: explain,
-                rerank: true
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await response.json();
@@ -155,7 +170,10 @@ async function performSearch() {
         const results = data.results || [];
         
         // Display search info
-        searchStats.textContent = `Found ${results.length} places in ${data.processing_time.toFixed(2)} seconds`;
+        searchStats.textContent = `Found ${results.length} places in ${data.processing_time.toFixed(2)} seconds.`;
+        if (quickSearch) {
+            searchStats.textContent += " (Quick Search)";
+        }
         
         // Display search mode
         searchMode.textContent = `Search modes: Text=${data.text_search_used}, Image=${data.image_search_used}`;
@@ -163,10 +181,12 @@ async function performSearch() {
         // Show search info section
         searchInfo.classList.remove('d-none');
         
-        // Display enhanced query if available
-        if (data.processed_query && data.processed_query !== data.original_query) {
+        // Display enhanced query if available and not in quick search mode
+        if (data.processed_query && data.processed_query !== data.original_query && !quickSearch) {
             enhancedQuery.textContent = `Enhanced query: ${data.processed_query}`;
             enhancedQuery.classList.remove('d-none');
+        } else {
+            enhancedQuery.classList.add('d-none');
         }
         
         // Show no results message if needed
@@ -180,7 +200,7 @@ async function performSearch() {
             const neighborhoodText = document.createElement('div');
             neighborhoodText.className = 'mt-2';
             neighborhoodText.textContent = `Detected neighborhoods: ${data.neighborhoods.join(', ')}`;
-            searchStats.appendChild(neighborhoodText);
+            searchStats.appendChild(neighborhoodText); // Append to searchStats for better layout
         }
         
         // Display results

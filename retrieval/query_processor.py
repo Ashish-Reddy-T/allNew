@@ -22,7 +22,7 @@ class QueryProcessor:
     3. Support for multiple LLM backends
     """
     
-    def __init__(self, llm_type: str = "ollama", model_name: str = "mistral:latest"):
+    def __init__(self, llm_type: str = "ollama", model_name: str = "mistral:7b-instruct-v0.3-q4_K_M"):
         """
         Initialize the query processor with the specified LLM.
         
