@@ -3,3 +3,11 @@
 *.pkl
 *.DS_Store
 *.pyc
+__pycache__/
+*.csv
+ingestion/build_index.py
+ingestion/combine_index.py
+generation/
+retrieval/expand_query.py
+retrieval/query_processor.py
+retrieval/search_index.py
