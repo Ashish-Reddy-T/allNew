@@ -8,17 +8,13 @@ import faiss
 import torch
 import pickle
 from sentence_transformers import SentenceTransformer
-from tqdm.auto import tqdm # Changed from tqdm to tqdm.auto for better environment detection
-# import re # Not used, can be removed
+from tqdm.auto import tqdm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
-# This might not be necessary if your project is structured as a package
-# or if you run your app from the project root.
-# Consider Python's package management for cleaner imports.
 # sys.path.append(str(Path(__file__).resolve().parent.parent))
 # from ingestion.metadata_utils import load_and_merge_metadata # Assuming this is correctly located
 
