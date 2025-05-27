@@ -9,6 +9,7 @@ import torch
 import pickle
 from sentence_transformers import SentenceTransformer
 from tqdm.auto import tqdm
+import argparse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
